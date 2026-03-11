@@ -547,67 +547,547 @@ const Scene3D = {
         group.userData = { bouncing: true, bounceTime: Math.random() * Math.PI * 2 };
     },
     
+    // ===== 动物外观构建系统 =====
+
+    // 创建鸡模型
+    _buildChicken(group, color) {
+        const bodyMat = new THREE.MeshLambertMaterial({ color: color || 0xf5f0e0 });
+        const legMat = new THREE.MeshLambertMaterial({ color: 0xf5a623 });
+        const combMat = new THREE.MeshLambertMaterial({ color: 0xcc2200 });
+        const beakMat = new THREE.MeshLambertMaterial({ color: 0xf5a623 });
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+        // 身体 - 圆润椭球形，前胸挺起
+        const bodyGeo = new THREE.SphereGeometry(0.22, 10, 8);
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.scale.set(1.0, 0.9, 1.2);
+        body.position.set(0, 0.28, 0);
+        body.castShadow = true;
+        group.add(body);
+
+        // 头部 - 小型椭圆
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.52, 0.22);
+        const headGeo = new THREE.SphereGeometry(0.13, 8, 8);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        // 鸡冠 - 红色锯齿状（5个齿）
+        for (let i = 0; i < 5; i++) {
+            const combGeo = new THREE.ConeGeometry(0.025, 0.06 + (i === 2 ? 0.03 : 0), 4);
+            const comb = new THREE.Mesh(combGeo, combMat);
+            comb.position.set((i - 2) * 0.04, 0.13 + (i === 2 ? 0.015 : 0), 0);
+            headGroup.add(comb);
+        }
+
+        // 肉垂 - 下方红色
+        const wattleGeo = new THREE.SphereGeometry(0.04, 6, 6);
+        const wattle = new THREE.Mesh(wattleGeo, combMat);
+        wattle.scale.set(1, 1.3, 0.8);
+        wattle.position.set(0, -0.1, 0.06);
+        headGroup.add(wattle);
+
+        // 喙 - 尖锐三角形，黄色
+        const beakGeo = new THREE.ConeGeometry(0.03, 0.1, 4);
+        const beak = new THREE.Mesh(beakGeo, beakMat);
+        beak.rotation.x = Math.PI / 2;
+        beak.position.set(0, -0.02, 0.14);
+        headGroup.add(beak);
+
+        // 眼睛
+        const eyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
+        [-0.07, 0.07].forEach(ex => {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(ex, 0.03, 0.1);
+            headGroup.add(eye);
+        });
+
+        group.add(headGroup);
+
+        // 翅膀 - 短小贴合身体两侧
+        [-1, 1].forEach(side => {
+            const wingGeo = new THREE.SphereGeometry(0.1, 6, 6);
+            const wing = new THREE.Mesh(wingGeo, bodyMat);
+            wing.scale.set(0.5, 0.7, 1.1);
+            wing.position.set(side * 0.22, 0.3, 0);
+            wing.castShadow = true;
+            group.add(wing);
+        });
+
+        // 尾羽 - 短翘羽毛束
+        const tailGeo = new THREE.ConeGeometry(0.08, 0.2, 5);
+        const tail = new THREE.Mesh(tailGeo, bodyMat);
+        tail.rotation.x = -Math.PI / 3;
+        tail.position.set(0, 0.38, -0.22);
+        group.add(tail);
+
+        // 腿 - 细长黄色，关节后弯
+        const legGeo = new THREE.CylinderGeometry(0.025, 0.02, 0.22, 5);
+        const leftLegGroup = new THREE.Group();
+        leftLegGroup.position.set(-0.08, 0.1, 0.02);
+        const leftLeg = new THREE.Mesh(legGeo, legMat);
+        leftLeg.position.y = -0.11;
+        leftLegGroup.add(leftLeg);
+        // 爪子
+        const clawGeo = new THREE.CylinderGeometry(0.015, 0.01, 0.08, 4);
+        [-1, 0, 1].forEach(dir => {
+            const claw = new THREE.Mesh(clawGeo, legMat);
+            claw.rotation.x = Math.PI / 2;
+            claw.rotation.z = dir * 0.4;
+            claw.position.set(dir * 0.04, -0.22, 0.03);
+            leftLegGroup.add(claw);
+        });
+        group.add(leftLegGroup);
+
+        const rightLegGroup = new THREE.Group();
+        rightLegGroup.position.set(0.08, 0.1, 0.02);
+        const rightLeg = new THREE.Mesh(legGeo, legMat);
+        rightLeg.position.y = -0.11;
+        rightLegGroup.add(rightLeg);
+        [-1, 0, 1].forEach(dir => {
+            const claw = new THREE.Mesh(clawGeo, legMat);
+            claw.rotation.x = Math.PI / 2;
+            claw.rotation.z = dir * 0.4;
+            claw.position.set(dir * 0.04, -0.22, 0.03);
+            rightLegGroup.add(claw);
+        });
+        group.add(rightLegGroup);
+
+        // 存储动画部件引用
+        group.userData.parts = {
+            body, headGroup,
+            leftLeg: leftLegGroup, rightLeg: rightLegGroup,
+            tail
+        };
+        group.userData.baseHeadPos = headGroup.position.clone();
+        group.userData.baseBodyY = body.position.y;
+    },
+
+    // 创建羊模型
+    _buildSheep(group, color) {
+        const woolMat = new THREE.MeshLambertMaterial({ color: color || 0xf0ede8 });
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0xd4c5a9 });
+        const legMat = new THREE.MeshLambertMaterial({ color: 0x888880 });
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const pupilMat = new THREE.MeshLambertMaterial({ color: 0x222200 });
+
+        // 身体 - 厚实圆筒形，覆盖蓬松羊毛
+        const bodyGeo = new THREE.SphereGeometry(0.38, 10, 8);
+        const body = new THREE.Mesh(bodyGeo, woolMat);
+        body.scale.set(1.0, 0.85, 1.3);
+        body.position.set(0, 0.42, 0);
+        body.castShadow = true;
+        group.add(body);
+
+        // 羊毛蓬松效果 - 多个球形叠加
+        const woolGroup = new THREE.Group();
+        woolGroup.position.set(0, 0.42, 0);
+        const woolPositions = [
+            [0.2, 0.15, 0.2], [-0.2, 0.15, 0.2], [0, 0.2, 0.3],
+            [0.25, 0.1, -0.1], [-0.25, 0.1, -0.1], [0, 0.18, -0.25],
+            [0.15, 0.2, 0], [-0.15, 0.2, 0]
+        ];
+        woolPositions.forEach(([wx, wy, wz]) => {
+            const wGeo = new THREE.SphereGeometry(0.14 + Math.random() * 0.05, 6, 6);
+            const w = new THREE.Mesh(wGeo, woolMat);
+            w.position.set(wx, wy, wz);
+            woolGroup.add(w);
+        });
+        group.add(woolGroup);
+
+        // 头部 - 窄长脸型
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.62, 0.42);
+        const headGeo = new THREE.BoxGeometry(0.22, 0.26, 0.32);
+        const head = new THREE.Mesh(headGeo, skinMat);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        // 鼻吻部
+        const snoutGeo = new THREE.BoxGeometry(0.16, 0.14, 0.12);
+        const snout = new THREE.Mesh(snoutGeo, skinMat);
+        snout.position.set(0, -0.06, 0.18);
+        headGroup.add(snout);
+
+        // 耳朵 - 水平向两侧
+        [-1, 1].forEach(side => {
+            const earGeo = new THREE.SphereGeometry(0.07, 6, 6);
+            const ear = new THREE.Mesh(earGeo, skinMat);
+            ear.scale.set(0.5, 0.8, 1.2);
+            ear.position.set(side * 0.16, 0.06, -0.05);
+            ear.rotation.z = side * 0.3;
+            headGroup.add(ear);
+        });
+
+        // 眼睛 - 横向瞳孔（关键特征）
+        [-0.08, 0.08].forEach(ex => {
+            const eyeGeo = new THREE.SphereGeometry(0.04, 8, 8);
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(ex, 0.04, 0.14);
+            headGroup.add(eye);
+            // 横向瞳孔
+            const pupilGeo = new THREE.BoxGeometry(0.06, 0.015, 0.01);
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            pupil.position.set(ex, 0.04, 0.175);
+            headGroup.add(pupil);
+        });
+
+        group.add(headGroup);
+
+        // 四条腿 - 细长直立
+        const legGeo = new THREE.CylinderGeometry(0.055, 0.045, 0.38, 6);
+        const legPositions = [
+            { name: 'frontLeft', x: -0.16, z: 0.22 },
+            { name: 'frontRight', x: 0.16, z: 0.22 },
+            { name: 'backLeft', x: -0.16, z: -0.22 },
+            { name: 'backRight', x: 0.16, z: -0.22 }
+        ];
+        const legGroups = {};
+        legPositions.forEach(({ name, x, z }) => {
+            const lg = new THREE.Group();
+            lg.position.set(x, 0.19, z);
+            const leg = new THREE.Mesh(legGeo, legMat);
+            leg.position.y = 0;
+            lg.add(leg);
+            // 蹄子（偶蹄）
+            const hoofGeo = new THREE.BoxGeometry(0.08, 0.06, 0.1);
+            const hoofMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            const hoof = new THREE.Mesh(hoofGeo, hoofMat);
+            hoof.position.y = -0.2;
+            lg.add(hoof);
+            group.add(lg);
+            legGroups[name] = lg;
+        });
+
+        // 尾巴 - 短小下垂
+        const tailGeo = new THREE.SphereGeometry(0.08, 6, 6);
+        const tail = new THREE.Mesh(tailGeo, woolMat);
+        tail.position.set(0, 0.42, -0.42);
+        group.add(tail);
+
+        group.userData.parts = {
+            body, headGroup, woolGroup,
+            frontLeft: legGroups.frontLeft, frontRight: legGroups.frontRight,
+            backLeft: legGroups.backLeft, backRight: legGroups.backRight,
+            tail
+        };
+        group.userData.baseWoolScale = woolGroup.scale.clone();
+        group.userData.baseHeadPos = headGroup.position.clone();
+    },
+
+    // 创建牛模型
+    _buildCow(group, color) {
+        const bodyMat = new THREE.MeshLambertMaterial({ color: color || 0xf5f0e8 });
+        const spotMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const legMat = new THREE.MeshLambertMaterial({ color: 0xd4c5a9 });
+        const hornMat = new THREE.MeshLambertMaterial({ color: 0xf0e0a0 });
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const udderMat = new THREE.MeshLambertMaterial({ color: 0xffb6c1 });
+        const noseMat = new THREE.MeshLambertMaterial({ color: 0xffb6c1 });
+
+        // 身体 - 大型长方体躯干
+        const bodyGeo = new THREE.BoxGeometry(0.65, 0.7, 1.6);
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.scale.set(1, 1, 1);
+        body.position.set(0, 0.72, 0);
+        body.castShadow = true;
+        group.add(body);
+
+        // 黑白斑块
+        const spotPositions = [[0.2, 0.2, 0.3], [-0.15, 0.1, -0.2], [0.1, -0.1, 0.5]];
+        spotPositions.forEach(([sx, sy, sz]) => {
+            const sGeo = new THREE.SphereGeometry(0.18 + Math.random() * 0.1, 6, 6);
+            const spot = new THREE.Mesh(sGeo, spotMat);
+            spot.scale.set(1.2, 0.3, 1.0);
+            spot.position.set(sx * 0.65, sy + 0.72, sz);
+            group.add(spot);
+        });
+
+        // 头部 - 宽大方正
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.88, 0.9);
+        const headGeo = new THREE.BoxGeometry(0.5, 0.46, 0.5);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        // 鼻吻部 - 宽阔
+        const snoutGeo = new THREE.BoxGeometry(0.38, 0.26, 0.22);
+        const snout = new THREE.Mesh(snoutGeo, noseMat);
+        snout.position.set(0, -0.1, 0.3);
+        headGroup.add(snout);
+
+        // 鼻孔
+        const nostrilGeo = new THREE.SphereGeometry(0.05, 6, 6);
+        const nostrilMat = new THREE.MeshLambertMaterial({ color: 0xcc8888 });
+        [-0.1, 0.1].forEach(nx => {
+            const nostril = new THREE.Mesh(nostrilGeo, nostrilMat);
+            nostril.scale.set(1, 0.5, 0.5);
+            nostril.position.set(nx, -0.1, 0.42);
+            headGroup.add(nostril);
+        });
+
+        // 犄角 - 向上外弯（关键特征）
+        [-1, 1].forEach(side => {
+            const hornGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.28, 6);
+            const horn = new THREE.Mesh(hornGeo, hornMat);
+            horn.position.set(side * 0.22, 0.26, -0.08);
+            horn.rotation.z = side * 0.5;
+            horn.rotation.x = -0.2;
+            headGroup.add(horn);
+        });
+
+        // 耳朵 - 大型水平伸展
+        [-1, 1].forEach(side => {
+            const earGeo = new THREE.SphereGeometry(0.1, 6, 6);
+            const ear = new THREE.Mesh(earGeo, bodyMat);
+            ear.scale.set(0.4, 0.7, 1.3);
+            ear.position.set(side * 0.3, 0.12, -0.1);
+            ear.rotation.z = side * 0.4;
+            headGroup.add(ear);
+        });
+
+        // 眼睛
+        const eyeGeo = new THREE.SphereGeometry(0.055, 8, 8);
+        [-0.17, 0.17].forEach(ex => {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(ex, 0.1, 0.22);
+            headGroup.add(eye);
+        });
+
+        group.add(headGroup);
+
+        // 四条腿 - 粗壮有力
+        const legGeo = new THREE.CylinderGeometry(0.09, 0.075, 0.55, 6);
+        const legPositions = [
+            { name: 'frontLeft', x: -0.22, z: 0.5 },
+            { name: 'frontRight', x: 0.22, z: 0.5 },
+            { name: 'backLeft', x: -0.22, z: -0.5 },
+            { name: 'backRight', x: 0.22, z: -0.5 }
+        ];
+        const legGroups = {};
+        legPositions.forEach(({ name, x, z }) => {
+            const lg = new THREE.Group();
+            lg.position.set(x, 0.38, z);
+            const leg = new THREE.Mesh(legGeo, legMat);
+            lg.add(leg);
+            const hoofGeo = new THREE.BoxGeometry(0.12, 0.08, 0.14);
+            const hoofMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+            const hoof = new THREE.Mesh(hoofGeo, hoofMat);
+            hoof.position.y = -0.3;
+            lg.add(hoof);
+            group.add(lg);
+            legGroups[name] = lg;
+        });
+
+        // 乳房 - 粉色
+        const udderGeo = new THREE.SphereGeometry(0.14, 8, 8);
+        const udder = new THREE.Mesh(udderGeo, udderMat);
+        udder.scale.set(1.2, 0.7, 1.0);
+        udder.position.set(0, 0.28, -0.3);
+        group.add(udder);
+        // 乳头
+        const teatGeo = new THREE.CylinderGeometry(0.025, 0.02, 0.07, 5);
+        [[-0.07, -0.1], [0.07, -0.1], [-0.07, 0.1], [0.07, 0.1]].forEach(([tx, tz]) => {
+            const teat = new THREE.Mesh(teatGeo, udderMat);
+            teat.position.set(tx, 0.22, tz - 0.3);
+            group.add(teat);
+        });
+
+        // 尾巴 - 长尾末端毛刷状
+        const tailGroup = new THREE.Group();
+        tailGroup.position.set(0, 0.72, -0.82);
+        const tailGeo = new THREE.CylinderGeometry(0.03, 0.025, 0.5, 5);
+        const tailMesh = new THREE.Mesh(tailGeo, legMat);
+        tailMesh.rotation.x = Math.PI / 6;
+        tailMesh.position.y = -0.25;
+        tailGroup.add(tailMesh);
+        // 毛刷
+        const tuftGeo = new THREE.SphereGeometry(0.08, 6, 6);
+        const tuftMat = new THREE.MeshLambertMaterial({ color: 0x888880 });
+        const tuft = new THREE.Mesh(tuftGeo, tuftMat);
+        tuft.position.set(0, -0.52, 0.14);
+        tailGroup.add(tuft);
+        group.add(tailGroup);
+
+        group.userData.parts = {
+            body, headGroup,
+            frontLeft: legGroups.frontLeft, frontRight: legGroups.frontRight,
+            backLeft: legGroups.backLeft, backRight: legGroups.backRight,
+            tail: tailGroup
+        };
+        group.userData.baseBodyPos = body.position.clone();
+        group.userData.baseHeadPos = headGroup.position.clone();
+    },
+
+    // 创建猪模型
+    _buildPig(group, color) {
+        const bodyMat = new THREE.MeshLambertMaterial({ color: color || 0xffb6c1 });
+        const snoutMat = new THREE.MeshLambertMaterial({ color: 0xff9aaa });
+        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const legMat = new THREE.MeshLambertMaterial({ color: 0xffaabb });
+
+        // 身体 - 滚圆桶形
+        const bodyGeo = new THREE.SphereGeometry(0.38, 10, 8);
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.scale.set(1.1, 0.85, 1.4);
+        body.position.set(0, 0.38, 0);
+        body.castShadow = true;
+        group.add(body);
+
+        // 头部 - 大型，与身体比例约1:3
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 0.5, 0.46);
+        const headGeo = new THREE.SphereGeometry(0.26, 10, 8);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.scale.set(1, 0.9, 1);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        // 鼻子 - 扁平圆盘状（关键特征）
+        const snoutGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.06, 12);
+        const snout = new THREE.Mesh(snoutGeo, snoutMat);
+        snout.rotation.x = Math.PI / 2;
+        snout.position.set(0, -0.04, 0.24);
+        headGroup.add(snout);
+        // 鼻孔
+        const nostrilGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8);
+        const nostrilMat = new THREE.MeshLambertMaterial({ color: 0xcc7788 });
+        [-0.05, 0.05].forEach(nx => {
+            const nostril = new THREE.Mesh(nostrilGeo, nostrilMat);
+            nostril.rotation.x = Math.PI / 2;
+            nostril.position.set(nx, -0.04, 0.27);
+            headGroup.add(nostril);
+        });
+
+        // 耳朵 - 大型三角形，前倾
+        [-1, 1].forEach(side => {
+            const earGeo = new THREE.ConeGeometry(0.1, 0.18, 4);
+            const ear = new THREE.Mesh(earGeo, bodyMat);
+            ear.position.set(side * 0.2, 0.2, -0.05);
+            ear.rotation.z = side * 0.3;
+            ear.rotation.x = 0.3;
+            headGroup.add(ear);
+        });
+
+        // 眼睛
+        const eyeGeo = new THREE.SphereGeometry(0.04, 8, 8);
+        [-0.1, 0.1].forEach(ex => {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(ex, 0.06, 0.22);
+            headGroup.add(eye);
+        });
+
+        group.add(headGroup);
+
+        // 四条腿 - 短粗
+        const legGeo = new THREE.CylinderGeometry(0.075, 0.065, 0.28, 6);
+        const legPositions = [
+            { name: 'frontLeft', x: -0.18, z: 0.26 },
+            { name: 'frontRight', x: 0.18, z: 0.26 },
+            { name: 'backLeft', x: -0.18, z: -0.26 },
+            { name: 'backRight', x: 0.18, z: -0.26 }
+        ];
+        const legGroups = {};
+        legPositions.forEach(({ name, x, z }) => {
+            const lg = new THREE.Group();
+            lg.position.set(x, 0.14, z);
+            const leg = new THREE.Mesh(legGeo, legMat);
+            lg.add(leg);
+            const hoofGeo = new THREE.BoxGeometry(0.1, 0.06, 0.1);
+            const hoofMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            const hoof = new THREE.Mesh(hoofGeo, hoofMat);
+            hoof.position.y = -0.17;
+            lg.add(hoof);
+            group.add(lg);
+            legGroups[name] = lg;
+        });
+
+        // 尾巴 - 卷曲螺旋状（关键特征）
+        const tailGroup = new THREE.Group();
+        tailGroup.position.set(0, 0.42, -0.5);
+        // 用多段模拟螺旋卷尾
+        for (let i = 0; i < 6; i++) {
+            const tGeo = new THREE.SphereGeometry(0.03 - i * 0.003, 5, 5);
+            const tMesh = new THREE.Mesh(tGeo, bodyMat);
+            const angle = i * 1.2;
+            const r = 0.06 - i * 0.005;
+            tMesh.position.set(Math.cos(angle) * r, -i * 0.03, Math.sin(angle) * r);
+            tailGroup.add(tMesh);
+        }
+        group.add(tailGroup);
+
+        group.userData.parts = {
+            body, headGroup,
+            frontLeft: legGroups.frontLeft, frontRight: legGroups.frontRight,
+            backLeft: legGroups.backLeft, backRight: legGroups.backRight,
+            tail: tailGroup, snout
+        };
+        group.userData.baseBodyRot = 0;
+        group.userData.baseSnoutPos = snout.position.clone();
+        group.userData.baseHeadPos = headGroup.position.clone();
+    },
+
     // 添加动物到场景
     addAnimalMesh(animal) {
         const animalData = ANIMALS_DATA[animal.type];
         if (!animalData) return;
-        
+
         const group = new THREE.Group();
         const angle = (this.animalMeshes.length / 8) * Math.PI * 2;
         const radius = 8;
         group.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
         group.userData = { animalId: animal.id, type: 'animal' };
-        
-        // 动物身体
-        const bodyGeo = new THREE.BoxGeometry(0.8, 0.6, 1.2);
-        const bodyMat = new THREE.MeshLambertMaterial({ color: animalData.color });
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.5;
-        body.castShadow = true;
-        group.add(body);
-        
-        // 头部
-        const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-        const head = new THREE.Mesh(headGeo, bodyMat);
-        head.position.set(0, 0.9, 0.5);
-        head.castShadow = true;
-        group.add(head);
-        
-        // 腿
-        const legGeo = new THREE.BoxGeometry(0.15, 0.4, 0.15);
-        const legMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(animalData.color).multiplyScalar(0.8) });
-        [[-0.25, -0.4], [0.25, -0.4], [-0.25, 0.4], [0.25, 0.4]].forEach(([lx, lz]) => {
-            const leg = new THREE.Mesh(legGeo, legMat);
-            leg.position.set(lx, 0.2, lz);
-            group.add(leg);
-        });
-        
-        // 眼睛
-        const eyeGeo = new THREE.SphereGeometry(0.06, 6, 6);
-        const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
-        [-0.15, 0.15].forEach(ex => {
-            const eye = new THREE.Mesh(eyeGeo, eyeMat);
-            eye.position.set(ex, 1.0, 0.8);
-            group.add(eye);
-        });
-        
+
+        // 根据动物类型构建对应模型
+        switch (animal.type) {
+            case 'chicken': this._buildChicken(group, animalData.color); break;
+            case 'sheep':   this._buildSheep(group, animalData.color);   break;
+            case 'cow':     this._buildCow(group, animalData.color);     break;
+            case 'pig':     this._buildPig(group, animalData.color);     break;
+            default:        this._buildSheep(group, animalData.color);   break;
+        }
+
         // 产出标记
         if (animal.hasProduct) {
             const markerGeo = new THREE.SphereGeometry(0.2, 8, 8);
             const markerMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
             const marker = new THREE.Mesh(markerGeo, markerMat);
-            marker.position.y = 1.8;
+            // 根据动物大小调整标记高度
+            const heights = { chicken: 1.2, sheep: 1.8, cow: 2.4, pig: 1.6 };
+            marker.position.y = heights[animal.type] || 1.8;
             marker.userData = { isProductMarker: true };
             group.add(marker);
         }
-        
-        group.userData.walkAngle = Math.random() * Math.PI * 2;
-        group.userData.walkSpeed = 0.3 + Math.random() * 0.3;
-        
+
+        // ===== 行为状态机初始化 =====
+        const speeds = { chicken: 2.0, sheep: 1.5, cow: 1.0, pig: 1.2 };
+        const stepFreqs = { chicken: 4.0, sheep: 2.0, cow: 1.5, pig: 2.5 };
+
+        group.userData.animalType = animal.type;
+        group.userData.animPhase = Math.random() * Math.PI * 2;
+        group.userData.walkSpeed = speeds[animal.type] || 1.5;
+        group.userData.stepFreq = stepFreqs[animal.type] || 2.0;
+
+        // 行为状态
+        group.userData.state = 'wandering';   // idle / wandering / foraging / resting / social
+        group.userData.stateTimer = 5 + Math.random() * 10;
+        group.userData.restTimer = 0;
+
+        // 移动目标
+        group.userData.targetX = group.position.x;
+        group.userData.targetZ = group.position.z;
+        group.userData.moveTimer = 0;
+
+        // 朝向
+        group.userData.facingAngle = Math.random() * Math.PI * 2;
+
         this.scene.add(group);
         this.animalMeshes.push(group);
         return group;
     },
+
     
     // 移除动物
     removeAnimalMesh(animalId) {
@@ -622,19 +1102,21 @@ const Scene3D = {
     updateAnimalProductMarker(animalId, hasProduct) {
         const mesh = this.animalMeshes.find(m => m.userData.animalId === animalId);
         if (!mesh) return;
-        
+
         const existing = mesh.children.find(c => c.userData.isProductMarker);
         if (hasProduct && !existing) {
             const markerGeo = new THREE.SphereGeometry(0.2, 8, 8);
             const markerMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
             const marker = new THREE.Mesh(markerGeo, markerMat);
-            marker.position.y = 1.8;
+            const heights = { chicken: 1.2, sheep: 1.8, cow: 2.4, pig: 1.6 };
+            marker.position.y = heights[mesh.userData.animalType] || 1.8;
             marker.userData = { isProductMarker: true };
             mesh.add(marker);
         } else if (!hasProduct && existing) {
             mesh.remove(existing);
         }
     },
+
     
     // 创建收获粒子特效
     createHarvestEffect(plotId, color) {
@@ -821,24 +1303,201 @@ const Scene3D = {
             }
         });
         
-        // 动物移动
+        // 动物行为状态机 + 四肢动画
         this.animalMeshes.forEach(mesh => {
-            if (mesh.userData.walkAngle !== undefined) {
-                mesh.userData.walkAngle += deltaTime * mesh.userData.walkSpeed;
-                const radius = 7 + Math.sin(mesh.userData.walkAngle * 0.3) * 1;
-                const baseAngle = (this.animalMeshes.indexOf(mesh) / this.animalMeshes.length) * Math.PI * 2;
-                mesh.position.x = Math.cos(baseAngle + mesh.userData.walkAngle * 0.1) * radius;
-                mesh.position.z = Math.sin(baseAngle + mesh.userData.walkAngle * 0.1) * radius;
-                mesh.rotation.y = -baseAngle - mesh.userData.walkAngle * 0.1 + Math.PI / 2;
-                
-                // 腿部摆动
-                const legSwing = Math.sin(mesh.userData.walkAngle * 4) * 0.3;
-                if (mesh.children[3]) mesh.children[3].rotation.x = legSwing;
-                if (mesh.children[4]) mesh.children[4].rotation.x = -legSwing;
-                if (mesh.children[5]) mesh.children[5].rotation.x = -legSwing;
-                if (mesh.children[6]) mesh.children[6].rotation.x = legSwing;
+            const ud = mesh.userData;
+            if (!ud.animalType) return;
+
+            const parts = ud.parts || {};
+
+            // ---- 行为状态机 ----
+            ud.stateTimer -= deltaTime;
+            ud.moveTimer -= deltaTime;
+
+            if (ud.stateTimer <= 0) {
+                // 随机切换行为意图
+                const roll = Math.random();
+                const weights = {
+                    chicken: { foraging: 0.35, wandering: 0.35, resting: 0.15, social: 0.15 },
+                    sheep:   { foraging: 0.40, wandering: 0.25, resting: 0.20, social: 0.15 },
+                    cow:     { foraging: 0.45, wandering: 0.20, resting: 0.25, social: 0.10 },
+                    pig:     { foraging: 0.40, wandering: 0.30, resting: 0.15, social: 0.15 }
+                };
+                const w = weights[ud.animalType] || weights.sheep;
+                if (roll < w.resting) {
+                    ud.state = 'resting';
+                    ud.stateTimer = 8 + Math.random() * 15;
+                } else if (roll < w.resting + w.foraging) {
+                    ud.state = 'foraging';
+                    ud.stateTimer = 10 + Math.random() * 20;
+                } else if (roll < w.resting + w.foraging + w.social) {
+                    ud.state = 'social';
+                    ud.stateTimer = 6 + Math.random() * 10;
+                } else {
+                    ud.state = 'wandering';
+                    ud.stateTimer = 8 + Math.random() * 15;
+                }
+            }
+
+            // ---- 移动目标更新 ----
+            const isMoving = (ud.state !== 'resting');
+            if (isMoving && ud.moveTimer <= 0) {
+                // 根据行为选择移动模式
+                let newX, newZ;
+                if (ud.state === 'foraging') {
+                    // 之字形觅食：小幅随机偏移
+                    newX = mesh.position.x + (Math.random() - 0.5) * 4;
+                    newZ = mesh.position.z + (Math.random() - 0.5) * 4;
+                } else if (ud.state === 'social') {
+                    // 向附近同类靠近
+                    const sameKind = this.animalMeshes.filter(m => m !== mesh && m.userData.animalType === ud.animalType);
+                    if (sameKind.length > 0) {
+                        const target = sameKind[Math.floor(Math.random() * sameKind.length)];
+                        newX = target.position.x + (Math.random() - 0.5) * 2;
+                        newZ = target.position.z + (Math.random() - 0.5) * 2;
+                    } else {
+                        newX = mesh.position.x + (Math.random() - 0.5) * 5;
+                        newZ = mesh.position.z + (Math.random() - 0.5) * 5;
+                    }
+                } else {
+                    // 随机漫步：较大范围
+                    newX = (Math.random() - 0.5) * 18;
+                    newZ = (Math.random() - 0.5) * 18;
+                }
+                // 限制在围栏内
+                ud.targetX = Math.max(-10, Math.min(10, newX));
+                ud.targetZ = Math.max(-10, Math.min(10, newZ));
+                ud.moveTimer = 2 + Math.random() * 4;
+            }
+
+            // ---- 移动执行 ----
+            let actualSpeed = 0;
+            if (isMoving) {
+                const dx = ud.targetX - mesh.position.x;
+                const dz = ud.targetZ - mesh.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                if (dist > 0.15) {
+                    // 速度：觅食时慢，漫步时正常
+                    const speedMult = ud.state === 'foraging' ? 0.6 : 1.0;
+                    actualSpeed = ud.walkSpeed * speedMult * 0.5;
+                    const moveX = (dx / dist) * actualSpeed * deltaTime;
+                    const moveZ = (dz / dist) * actualSpeed * deltaTime;
+                    mesh.position.x += moveX;
+                    mesh.position.z += moveZ;
+
+                    // 平滑转向
+                    const targetAngle = Math.atan2(dx, dz);
+                    let angleDiff = targetAngle - ud.facingAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    ud.facingAngle += angleDiff * Math.min(1, deltaTime * 5);
+                    mesh.rotation.y = ud.facingAngle;
+                }
+            }
+
+            // ---- 四肢动画 ----
+            ud.animPhase += deltaTime * ud.stepFreq * (actualSpeed > 0 ? 1 : 0.1);
+
+            const phase = ud.animPhase;
+            const isWalking = actualSpeed > 0.05;
+
+            if (ud.animalType === 'chicken') {
+                // 鸡：高频小碎步 + 头部前后点动
+                const legSwing = isWalking ? Math.sin(phase * Math.PI * 2) * 0.7 : 0;
+                if (parts.leftLeg) parts.leftLeg.rotation.x = legSwing;
+                if (parts.rightLeg) parts.rightLeg.rotation.x = -legSwing;
+                // 头部点动（鸡的标志性动作）
+                if (parts.headGroup) {
+                    const bob = isWalking
+                        ? Math.sin((phase + 0.5) * Math.PI * 2) * 0.06
+                        : 0;
+                    parts.headGroup.position.z = ud.baseHeadPos.z + bob;
+                    // 觅食时低头啄地
+                    if (ud.state === 'foraging') {
+                        parts.headGroup.rotation.x = 0.3 + Math.abs(Math.sin(phase * Math.PI * 3)) * 0.3;
+                    } else {
+                        parts.headGroup.rotation.x = 0;
+                    }
+                }
+                // 身体微微上下起伏
+                if (parts.body) {
+                    parts.body.position.y = ud.baseBodyY + (isWalking ? Math.abs(Math.sin(phase * Math.PI * 4)) * 0.03 : 0);
+                }
+
+            } else if (ud.animalType === 'sheep') {
+                // 羊：四足对角步态
+                const legSwingRad = isWalking ? 0.45 : 0;
+                const d1 = Math.sin(phase * Math.PI * 2) * legSwingRad;
+                const d2 = Math.sin((phase + 0.5) * Math.PI * 2) * legSwingRad;
+                if (parts.frontLeft)  parts.frontLeft.rotation.x  = d1;
+                if (parts.backRight)  parts.backRight.rotation.x  = d1 * 0.8;
+                if (parts.frontRight) parts.frontRight.rotation.x = d2;
+                if (parts.backLeft)   parts.backLeft.rotation.x   = d2 * 0.8;
+                // 羊毛弹动
+                if (parts.woolGroup && isWalking) {
+                    const bounce = 1 + Math.abs(Math.sin(phase * Math.PI * 4)) * 0.04;
+                    parts.woolGroup.scale.set(bounce, bounce, bounce);
+                }
+                // 尾巴左右摆动
+                if (parts.tail) {
+                    parts.tail.rotation.y = Math.sin(phase * Math.PI * 4) * 0.18;
+                }
+                // 吃草时低头
+                if (parts.headGroup) {
+                    parts.headGroup.rotation.x = ud.state === 'foraging' ? 0.5 : 0;
+                }
+
+            } else if (ud.animalType === 'cow') {
+                // 牛：沉稳四足步态
+                const legSwingRad = isWalking ? 0.35 : 0;
+                const fp = Math.sin(phase * Math.PI * 2) * legSwingRad;
+                const bp = Math.sin((phase + 0.25) * Math.PI * 2) * legSwingRad;
+                if (parts.frontLeft)  parts.frontLeft.rotation.x  = fp;
+                if (parts.frontRight) parts.frontRight.rotation.x = -fp;
+                if (parts.backLeft)   parts.backLeft.rotation.x   = bp;
+                if (parts.backRight)  parts.backRight.rotation.x  = -bp;
+                // 身体左右轻微晃动
+                if (parts.body && ud.baseBodyPos && isWalking) {
+                    parts.body.position.x = ud.baseBodyPos.x + Math.sin(phase * Math.PI * 2) * 0.04;
+                }
+                // 尾巴自然摆动
+                if (parts.tail) {
+                    parts.tail.rotation.y = Math.sin(phase * Math.PI * 3) * 0.25;
+                }
+                // 偶尔耳朵扇动（通过头部轻微晃动模拟）
+                if (parts.headGroup && Math.random() < 0.002) {
+                    parts.headGroup.rotation.z = (Math.random() - 0.5) * 0.15;
+                    setTimeout(() => { if (parts.headGroup) parts.headGroup.rotation.z = 0; }, 300);
+                }
+
+            } else if (ud.animalType === 'pig') {
+                // 猪：短腿快速 + 身体左右摇摆
+                const legSwingRad = isWalking ? 0.55 : 0;
+                const lp = Math.sin(phase * Math.PI * 2) * legSwingRad;
+                if (parts.frontLeft)  parts.frontLeft.rotation.x  = lp;
+                if (parts.frontRight) parts.frontRight.rotation.x = -lp;
+                if (parts.backLeft)   parts.backLeft.rotation.x   = -lp * 0.9;
+                if (parts.backRight)  parts.backRight.rotation.x  = lp * 0.9;
+                // 身体明显左右摇摆（猪的特征）
+                if (parts.body && isWalking) {
+                    parts.body.rotation.z = Math.sin(phase * Math.PI * 2) * 0.08;
+                }
+                // 鼻子上下嗅动
+                if (parts.snout && ud.baseSnoutPos) {
+                    parts.snout.position.y = ud.baseSnoutPos.y + Math.sin(phase * Math.PI * 6) * 0.025;
+                }
+                // 卷尾轻微晃动
+                if (parts.tail) {
+                    parts.tail.rotation.y = Math.sin(phase * Math.PI * 4) * 0.3;
+                }
+                // 拱地时鼻子贴地
+                if (parts.headGroup) {
+                    parts.headGroup.rotation.x = ud.state === 'foraging' ? 0.35 : 0;
+                }
             }
         });
+
         
         // 粒子更新
         for (let i = this.particles.length - 1; i >= 0; i--) {
