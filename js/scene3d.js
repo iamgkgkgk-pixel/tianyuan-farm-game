@@ -1317,7 +1317,8 @@ const Scene3D = {
             [-5,  0], [0,  0], [5,  0],
             [-5,  5], [0,  5], [5,  5]
         ];
-        const halfSize = 1.75 + 0.3; // 地块半宽 + 安全边距
+        const halfSize = 1.75 + 0.65; // 地块半宽 + 安全边距（覆盖最大动物半径）
+
         for (const [px, pz] of plotPositions) {
             if (Math.abs(x - px) < halfSize && Math.abs(z - pz) < halfSize) {
                 return true;
@@ -1620,16 +1621,23 @@ const Scene3D = {
                 // 限制在围栏内
                 newX = Math.max(-10, Math.min(10, newX));
                 newZ = Math.max(-10, Math.min(10, newZ));
-                // 避开种植地块：若目标落在地块上则重新采样（最多5次）
-                for (let attempt = 0; attempt < 5; attempt++) {
+                // 避开种植地块：若目标落在地块上则重新采样（最多10次，全部用全局随机保证有效）
+                for (let attempt = 0; attempt < 10; attempt++) {
                     if (!this._isOnFarmPlot(newX, newZ)) break;
+                    // 全局随机重采样，确保能找到安全位置
                     newX = (Math.random() - 0.5) * 18;
                     newZ = (Math.random() - 0.5) * 18;
                     newX = Math.max(-10, Math.min(10, newX));
                     newZ = Math.max(-10, Math.min(10, newZ));
                 }
+                // 最终兜底：若仍在地块上，强制移到当前位置（原地等待）
+                if (this._isOnFarmPlot(newX, newZ)) {
+                    newX = mesh.position.x;
+                    newZ = mesh.position.z;
+                }
                 ud.targetX = newX;
                 ud.targetZ = newZ;
+
                 ud.moveTimer = 2 + Math.random() * 4;
             }
 
@@ -1694,6 +1702,16 @@ const Scene3D = {
                     mesh.position.z = Math.max(-10, Math.min(10, mesh.position.z));
                     other.position.x = Math.max(-10, Math.min(10, other.position.x));
                     other.position.z = Math.max(-10, Math.min(10, other.position.z));
+                    // 推开后若落入地块，则回退到推开前的位置
+                    if (this._isOnFarmPlot(mesh.position.x, mesh.position.z)) {
+                        mesh.position.x -= nx * push;
+                        mesh.position.z -= nz * push;
+                    }
+                    if (this._isOnFarmPlot(other.position.x, other.position.z)) {
+                        other.position.x += nx * push;
+                        other.position.z += nz * push;
+                    }
+
                 }
             });
 
