@@ -66,6 +66,12 @@ const Scene3D = {
             PondSystem.init(this.scene);
         }
 
+        // 初始化扭蛋机
+        if (typeof GachaSystem !== 'undefined') {
+            GachaSystem.init(this.scene);
+        }
+
+
         // 初始化天气视觉系统
         if (typeof WeatherSystem !== 'undefined') {
             WeatherSystem.init(this.scene);
@@ -1215,7 +1221,7 @@ const Scene3D = {
         const leftLeg = new THREE.Mesh(legGeo, legMat);
         leftLeg.position.y = -0.09;
         leftLegGroup.add(leftLeg);
-        // 蹼足
+        // 蹬足
         const webGeo = new THREE.ConeGeometry(0.07, 0.04, 3);
         const webL = new THREE.Mesh(webGeo, billMat);
         webL.rotation.x = Math.PI / 2;
@@ -1559,20 +1565,47 @@ const Scene3D = {
             if (PondSystem.checkFishingSpotClick(raycaster)) return;
         }
 
-        // 检测动物点击
-        const animalObjects = this.animalMeshes.map(g => g.children[0]);
-        const animalIntersects = raycaster.intersectObjects(animalObjects);
+        // 检测动物点击（递归检测所有子mesh，因为动物模型是多层Group结构）
+        const animalIntersects = raycaster.intersectObjects(this.animalMeshes, true);
         if (animalIntersects.length > 0) {
-            const animalGroup = animalIntersects[0].object.parent;
-            const animalId = animalGroup.userData.animalId;
-            onAnimalClick(animalId, e.clientX, e.clientY);
-            return;
+            // 向上找到 animalMeshes 中的顶层 Group
+            let obj = animalIntersects[0].object;
+            while (obj.parent && !this.animalMeshes.includes(obj)) {
+                obj = obj.parent;
+            }
+            const animalId = obj.userData.animalId;
+            if (animalId !== undefined) {
+                onAnimalClick(animalId, e.clientX, e.clientY);
+                return;
+            }
         }
+
+        // 检测扭蛋机点击
+        if (typeof GachaSystem !== 'undefined' && GachaSystem.machine) {
+            const gachaHits = raycaster.intersectObjects(GachaSystem.machine.children, true);
+            if (gachaHits.length > 0) {
+                GachaSystem.onMachineClick();
+                return;
+            }
+        }
+
+
         
+        // 检测湖面点击，生成涟漪
+        if (typeof PondSystem !== 'undefined' && PondSystem.pondMesh) {
+            const pondHits = raycaster.intersectObject(PondSystem.pondMesh);
+            if (pondHits.length > 0) {
+                const pt = pondHits[0].point;
+                PondSystem.createRipple(pt.x, pt.z);
+                return;
+            }
+        }
+
         // 关闭菜单
         hideAllMenus();
 
     },
+
     
     // 高亮土地
     highlightPlot(plotId, highlight) {
@@ -1608,11 +1641,15 @@ const Scene3D = {
             SceneBeautify.updateParticles(deltaTime, time);
         }
 
-        // 池塘系统更新（涟漪/鱼影/蜻蜓/青蛙）
+        // 池塘系统更新（涥漪/鱼影/蚕蚀/青蛙）
         if (typeof PondSystem !== 'undefined') {
             PondSystem.update(deltaTime);
         }
 
+        // 扭蛋机待机动画
+        if (typeof GachaSystem !== 'undefined') {
+            GachaSystem.update(deltaTime);
+        }
 
         // 作物动画：随风摇摆 + 成熟跳动
         this.cropMeshes.forEach((mesh, i) => {

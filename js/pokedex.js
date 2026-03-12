@@ -25,8 +25,15 @@ const POKEDEX_CATEGORIES = {
         icon: '🏅',
         total: 20,
         entries: {}
+    },
+    collection: {
+        name: '珍藏品',
+        icon: '🌟',
+        total: 27, // GACHA_ITEMS数量
+        entries: {}
     }
 };
+
 
 // 鱼类数据
 const FISH_DATA = {
@@ -207,6 +214,10 @@ const Pokedex = {
             this.renderAnimalEntries(grid);
         } else if (category === 'achievement') {
             this.renderAchievementEntries(grid);
+        } else if (category === 'collection') {
+            if (typeof GachaSystem !== 'undefined') {
+                GachaSystem.renderCollectionPokedex(grid);
+            }
         }
 
         content.appendChild(grid);

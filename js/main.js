@@ -77,6 +77,11 @@ async function initGame() {
         updateHUD();
         updateWeatherDisplay();
         updateSeasonDisplay();
+
+        // 更新扭蛋机代币HUD
+        const gachaBadge = document.getElementById('gacha-token-badge');
+        if (gachaBadge) gachaBadge.textContent = GameState.gacha?.tokens || 0;
+
         
         // 隐藏加载界面
         const loading = document.getElementById('loading');

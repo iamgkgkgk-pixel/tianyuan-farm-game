@@ -227,7 +227,16 @@ const PondSystem = {
             group.add(label);
 
             group.userData = { type: 'fishingSpot', spotId: spot.id };
+
+            // 添加不可见的大碰撞体，让点击更容易命中
+            const hitboxGeo = new THREE.BoxGeometry(2.0, 1.5, 2.0);
+            const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+            const hitbox = new THREE.Mesh(hitboxGeo, hitboxMat);
+            hitbox.position.set(0, 0.5, 0);
+            group.add(hitbox);
+
             this.scene.add(group);
+
             this.fishingSpotMeshes.push(group);
         });
     },
@@ -339,15 +348,16 @@ const PondSystem = {
             this.scene.remove(old.mesh);
             old.mesh.geometry.dispose();
         }
-        const geo = new THREE.RingGeometry(0.05, 0.12, 24);
+        const geo = new THREE.RingGeometry(0.08, 0.18, 32);
         const mat = new THREE.MeshBasicMaterial({
-            color: 0xaaddff, transparent: true, opacity: 0.7, side: THREE.DoubleSide
+            color: 0xaaddff, transparent: true, opacity: 0.8, side: THREE.DoubleSide
         });
         const ring = new THREE.Mesh(geo, mat);
         ring.rotation.x = -Math.PI / 2;
         ring.position.set(x, 0.02, z);
         this.scene.add(ring);
-        this.ripples.push({ mesh: ring, age: 0, maxAge: 1.5 });
+        this.ripples.push({ mesh: ring, age: 0, maxAge: 2.0 });
+
     },
 
     // ===== 鸭子划水尾波 =====
@@ -443,7 +453,8 @@ const PondSystem = {
             const r = this.ripples[i];
             r.age += deltaTime;
             const progress = r.age / r.maxAge;
-            const scale = 1 + progress * 15; // 扩散到最大半径约2单位
+            const scale = 1 + progress * 5; // 扩散到最大半径约1单位，自然涟漪效果
+
             r.mesh.scale.set(scale, scale, scale);
             r.mesh.material.opacity = 0.7 * (1 - progress);
             if (r.age >= r.maxAge) {
@@ -557,16 +568,28 @@ const PondSystem = {
 
     // ===== 点击检测（钓鱼点） =====
     checkFishingSpotClick(raycaster) {
-        const meshes = this.fishingSpotMeshes.map(g => g.children[0]).filter(Boolean);
-        const hits = raycaster.intersectObjects(meshes, false);
+        // 递归检测所有子mesh（码头平台很薄，需要递归才能命中）
+        const hits = raycaster.intersectObjects(this.fishingSpotMeshes, true);
         if (hits.length > 0) {
-            const spotGroup = hits[0].object.parent;
-            const spotId = spotGroup.userData.spotId;
-            if (typeof FishingSystem !== 'undefined') {
-                FishingSystem.startFishing();
+            // 向上找到 fishingSpotMeshes 中的顶层 Group
+            let obj = hits[0].object;
+            while (obj.parent && !this.fishingSpotMeshes.includes(obj)) {
+                obj = obj.parent;
             }
-            return true;
+            if (obj.userData && obj.userData.type === 'fishingSpot') {
+                if (typeof FishingSystem !== 'undefined') {
+                    // 先打开钓鱼UI弹窗，再开始钓鱼
+                    FishingSystem.showFishingUI();
+                    // 如果当前是空闲状态，自动开始钓鱼
+                    if (FishingSystem.state === FISHING_STATE.IDLE) {
+                        FishingSystem.startFishing();
+                    }
+                }
+                return true;
+            }
         }
         return false;
     }
+
+
 };

@@ -84,8 +84,19 @@ const GameState = {
     // 图鉴里程碑已领取
     pokedexMilestones: new Set(),
 
-    
+    // 扭蛋机系统
+    gacha: {
+        tokens: 3,              // 新手赠送3枚代币
+        collections: [],        // 珍藏品列表
+        hasFirstGacha: false,   // 首次扭蛋保底标记
+        dailySeq: {},           // 每日序号
+        lastDailyTokenDate: null,
+        animalTokenDate: {},
+        pokedexTokenMilestones: new Set()
+    },
+
     // 初始化
+
     init() {
         // 初始化土地（9块）
         for (let i = 0; i < 9; i++) {
@@ -139,8 +150,13 @@ const GameState = {
             achievements: [...this.achievements],
             gameTime: this.gameTime,
             pokedex: this.pokedex,
-            pokedexMilestones: [...(this.pokedexMilestones || new Set())]
+            pokedexMilestones: [...(this.pokedexMilestones || new Set())],
+            gacha: {
+                ...this.gacha,
+                pokedexTokenMilestones: [...(this.gacha?.pokedexTokenMilestones || new Set())]
+            }
         };
+
 
         try {
             localStorage.setItem('farm3d_save', JSON.stringify(saveData));
@@ -181,6 +197,14 @@ const GameState = {
 
             if (data.pokedex) this.pokedex = data.pokedex;
             if (data.pokedexMilestones) this.pokedexMilestones = new Set(data.pokedexMilestones);
+            if (data.gacha) {
+                this.gacha = {
+                    ...this.gacha,
+                    ...data.gacha,
+                    pokedexTokenMilestones: new Set(data.gacha.pokedexTokenMilestones || [])
+                };
+            }
+
 
             
             // 处理离线收益
@@ -477,6 +501,22 @@ const GameState = {
             && Scene3D.animalMeshes && Scene3D.animalMeshes.length > 0) {
             AnimalBehavior.update(deltaTime, Scene3D.animalMeshes, this.animals, this.gameTime.weather, this.gameTime.hour);
         }
+
+        // 扭蛋机：每日任务代币检查 & 动物好感度代币（每分钟检查一次）
+        if (!this._gachaCheckTimer) this._gachaCheckTimer = 0;
+        this._gachaCheckTimer += deltaTime;
+        if (this._gachaCheckTimer >= 60) {
+            this._gachaCheckTimer = 0;
+            if (typeof GachaSystem !== 'undefined') {
+                GachaSystem.checkDailyTaskTokens();
+                GachaSystem.checkAnimalTokens();
+                GachaSystem.checkPokedexTokens();
+                // 更新HUD代币数量
+                const badge = document.getElementById('gacha-token-badge');
+                if (badge) badge.textContent = this.gacha?.tokens || 0;
+            }
+        }
+
 
 
         

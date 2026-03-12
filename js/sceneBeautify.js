@@ -126,7 +126,15 @@ const SceneBeautify = {
             let postIndex = 0;
             for (let t = -fenceRadius; t <= fenceRadius; t += spacing) {
                 postIndex++;
+
+                const px = side.axis === 'x' ? t : side.fixed;
+                const pz = side.axis === 'z' ? t : side.fixed;
+
+                // 跳过落在湖泊区域内的桩位（含1.5缓冲）
+                if (this._isInPondArea(px, pz, 1.5)) continue;
+
                 // 随机粗细变化 ±15%
+
                 const thickMult = 0.85 + Math.random() * 0.3;
                 const w = 0.18 * thickMult;
 
@@ -141,9 +149,8 @@ const SceneBeautify = {
                 });
                 const post = new THREE.Mesh(postGeo, postMat);
 
-                const px = side.axis === 'x' ? t : side.fixed;
-                const pz = side.axis === 'z' ? t : side.fixed;
                 post.position.set(px, postH / 2, pz);
+
                 if (isBroken) post.rotation.z = tiltAngle * (Math.random() > 0.5 ? 1 : -1);
                 post.castShadow = true;
                 scene.add(post);
@@ -157,8 +164,14 @@ const SceneBeautify = {
                     scene.add(corner);
                 }
 
-                // 横木条（两根，高低各一）
+                // 横木条（两根，高低各一）—— 跳过下一段也在湖泊内的情况
                 if (t < fenceRadius) {
+                    const nextT = t + spacing;
+                    const npx = side.axis === 'x' ? nextT : side.fixed;
+                    const npz = side.axis === 'z' ? nextT : side.fixed;
+                    // 如果当前桩或下一桩在湖泊内，跳过横木
+                    if (this._isInPondArea(npx, npz, 1.5)) continue;
+
                     const railLen = spacing;
                     const railMat = new THREE.MeshLambertMaterial({
                         color: railColors[Math.floor(Math.random() * railColors.length)]
@@ -253,10 +266,33 @@ const SceneBeautify = {
 
     // 检查坐标是否在池塘区域内（含缓冲）
     _isInPondArea(x, z, buffer = 1.0) {
-        const dx = (x - (-8)) / (4.0 + buffer);
-        const dz = (z - 8) / (3.0 + buffer);
-        return dx * dx + dz * dz <= 1.0;
+        // 使用射线法判断不规则湖泊多边形（与pond.js的POND_SHAPE_POINTS保持一致）
+        const POND_CENTER_X = -14, POND_CENTER_Z = 11;
+        const POND_SHAPE = [
+            [ 4.5,  0.5], [ 3.8,  2.5], [ 1.5,  4.0], [-1.0,  3.8],
+            [-3.5,  2.8], [-5.0,  0.8], [-4.8, -1.5], [-3.0, -3.5],
+            [-0.5, -4.2], [ 2.0, -3.8], [ 4.0, -2.0], [ 4.5,  0.5]
+        ];
+        const lx = x - POND_CENTER_X;
+        const lz = z - POND_CENTER_Z;
+        // 先用椭圆快速排除
+        const scale = 1.0 + buffer / 5.0;
+        const dx = lx / (5.0 * scale + buffer);
+        const dz = lz / (4.0 * scale + buffer);
+        if (dx * dx + dz * dz > 1.0) return false;
+        // 射线法精确判断
+        const pts = POND_SHAPE;
+        let inside = false;
+        for (let i = 0, j = pts.length - 2; i < pts.length - 1; j = i++) {
+            const xi = pts[i][0] * scale, zi = pts[i][1] * scale;
+            const xj = pts[j][0] * scale, zj = pts[j][1] * scale;
+            const intersect = ((zi > lz) !== (zj > lz)) &&
+                (lx < (xj - xi) * (lz - zi) / (zj - zi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     },
+
 
     // ===== 5. 地面装饰物 =====
     createGroundDecorations(scene) {

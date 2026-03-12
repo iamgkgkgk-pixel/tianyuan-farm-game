@@ -267,10 +267,14 @@ const FishingSystem = {
 
         showNotification(`🎣 钓到了 ${fish.name}！获得 ${gold}金币 +${xp}XP`, 'gold');
 
-        // 传说鱼特殊提示
+        // 传说鱼特殊提示 + 扭蛋代币联动
         if (fish.rarity === 'legendary') {
             showNotification(`🐉 传说鱼！全服捕获率极低！`, 'gold');
+            if (typeof GachaSystem !== 'undefined') {
+                GachaSystem.onLegendaryFishCaught(fish.id);
+            }
         }
+
 
         GameState.save();
 
