@@ -787,247 +787,210 @@ const Scene3D = {
     // 创建牛模型
     _buildCow(group, color) {
         // ===== 高辨识度卡通奶牛 =====
-        // 核心特征：黑白斑块、横向长方体型、宽大鼻镜、水平耳朵、短犄角、乳房
-        // 总高度约1.1单位，身长约1.5单位（身长>身高，比例约1.4:1）
+        // 参考 CowModel 设计：BoxGeometry 身体 + CircleGeometry 斑块 + 独立鼻镜 + 水平耳朵
+        // 坐标系：z 正方向为头部，z 负方向为尾部，y 为高度
+        // 整体缩放：身体 BoxGeometry(2.0,1.0,1.0) → 实际约 0.8×0.4×0.4（乘以0.4缩放）
+
+        const SCALE = 0.42; // 整体缩放系数，适配游戏场景
 
         // --- 材质定义 ---
-        const bodyMat     = new THREE.MeshLambertMaterial({ color: 0xF5F5F0 }); // 奶白色底色
-        const spotMat     = new THREE.MeshLambertMaterial({ color: 0x1A1A1A }); // 纯黑斑块
-        const legMat      = new THREE.MeshLambertMaterial({ color: 0xF0EEE8 }); // 腿部白色
-        const hoofMat     = new THREE.MeshLambertMaterial({ color: 0x3D3D3D }); // 深灰蹄子
-        const hornMat     = new THREE.MeshLambertMaterial({ color: 0xD4C4A8 }); // 米黄犄角
-        const eyeMat      = new THREE.MeshLambertMaterial({ color: 0x4A3728 }); // 深棕眼睛
-        const eyeHighMat  = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // 眼睛高光
-        const noseMat     = new THREE.MeshLambertMaterial({ color: 0xE8B4B8 }); // 粉色鼻镜
-        const nostrilMat  = new THREE.MeshLambertMaterial({ color: 0xB07880 }); // 鼻孔深色
-        const earInnerMat = new THREE.MeshLambertMaterial({ color: 0xF0C0C0 }); // 耳内浅粉
-        const udderMat    = new THREE.MeshLambertMaterial({ color: 0xF5D0D0 }); // 乳房粉白
-        const tailMat     = new THREE.MeshLambertMaterial({ color: 0xE8E4DC }); // 尾巴米白
-        const neckMat     = new THREE.MeshLambertMaterial({ color: 0xF0EDE5 }); // 颈部
+        const whiteMat    = new THREE.MeshLambertMaterial({ color: 0xF5F5F0 }); // 奶白色
+        const blackMat    = new THREE.MeshLambertMaterial({ color: 0x1A1A1A, side: THREE.DoubleSide }); // 黑色斑块
+        const pinkMat     = new THREE.MeshLambertMaterial({ color: 0xFFB6C1 }); // 粉色（鼻子/乳房）
+        const brownMat    = new THREE.MeshLambertMaterial({ color: 0x4A3728 }); // 深棕（眼睛）
+        const hornMat     = new THREE.MeshLambertMaterial({ color: 0xF5DEB3 }); // 米黄（犄角）
+        const hoofMat     = new THREE.MeshLambertMaterial({ color: 0x3D3D3D }); // 深灰（蹄子）
+        const whiteSolid  = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // 纯白（眼白/高光）
+        const darkPinkMat = new THREE.MeshLambertMaterial({ color: 0xCC7788 }); // 深粉（鼻孔）
 
-        // ===== 身体 - 横向桶状，身长明显大于身高 =====
-        // 身体：宽0.72，高0.50，长1.05（长宽比约1.4:1）
-        const bodyGeo = new THREE.SphereGeometry(0.35, 14, 10);
-        const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.scale.set(2.06, 1.43, 3.0);  // x=0.72, y=0.50, z=1.05
-        body.position.set(0, 0.58, 0);
+        // ===== 身体 - 真正的长方体，身长明显大于身高 =====
+        // BoxGeometry(2.0, 1.0, 1.0) * SCALE → 宽0.84, 高0.42, 深0.42
+        const bodyGroup = new THREE.Group();
+        bodyGroup.position.set(0, 0.55, 0);
+        group.add(bodyGroup);
+
+        const bodyGeo = new THREE.BoxGeometry(2.0 * SCALE, 1.0 * SCALE, 1.0 * SCALE);
+        const body = new THREE.Mesh(bodyGeo, whiteMat);
         body.castShadow = true;
-        group.add(body);
+        bodyGroup.add(body);
 
-        // ===== 黑白斑块 - 不规则大斑，贴合身体表面 =====
-        // 使用扁平椭球贴在身体表面，scale.y极小使其贴合曲面
-        // 身体表面：右侧x≈+0.72，左侧x≈-0.72，顶部y≈0.58+0.50=1.08，底部y≈0.08
+        // ===== 黑色斑块 - CircleGeometry 贴在身体两侧面 =====
+        // 身体侧面 z = ±0.5*SCALE = ±0.21，斑块贴在侧面
         const spotDefs = [
-            // 背部右侧大斑（最显眼）
-            { pos: [0.55, 0.95, 0.10],  scale: [0.28, 0.22, 0.38], rx: 0,    rz:  0.5 },
-            // 背部左侧大斑
-            { pos: [-0.50, 0.92, -0.15], scale: [0.24, 0.20, 0.42], rx: 0,   rz: -0.5 },
-            // 右侧腹大斑
-            { pos: [0.68, 0.62, 0.25],  scale: [0.20, 0.30, 0.28], rx: 0,    rz:  1.1 },
-            // 左侧腹斑
-            { pos: [-0.65, 0.58, -0.30], scale: [0.18, 0.28, 0.24], rx: 0,   rz: -1.1 },
-            // 臀部斑
-            { pos: [0.20, 0.72, -0.48],  scale: [0.22, 0.18, 0.20], rx: 0.5, rz:  0.2 },
-            // 肩部小斑
-            { pos: [-0.30, 0.88, 0.38],  scale: [0.14, 0.12, 0.18], rx: 0,   rz: -0.3 },
+            // 右侧面（z正方向）
+            { x:  0.5 * SCALE, y:  0.3 * SCALE, z:  0.505 * SCALE, size: 0.35 * SCALE, rz:  0.3 },
+            { x: -0.3 * SCALE, y:  0.2 * SCALE, z:  0.505 * SCALE, size: 0.40 * SCALE, rz: -0.5 },
+            { x:  0.2 * SCALE, y: -0.1 * SCALE, z:  0.505 * SCALE, size: 0.30 * SCALE, rz:  0.8 },
+            { x: -0.7 * SCALE, y:  0.1 * SCALE, z:  0.505 * SCALE, size: 0.35 * SCALE, rz:  0.2 },
+            // 左侧面（z负方向）
+            { x:  0.5 * SCALE, y:  0.3 * SCALE, z: -0.505 * SCALE, size: 0.35 * SCALE, rz: -0.3 },
+            { x: -0.3 * SCALE, y:  0.2 * SCALE, z: -0.505 * SCALE, size: 0.40 * SCALE, rz:  0.5 },
+            { x:  0.2 * SCALE, y: -0.1 * SCALE, z: -0.505 * SCALE, size: 0.30 * SCALE, rz: -0.8 },
+            { x: -0.7 * SCALE, y:  0.1 * SCALE, z: -0.505 * SCALE, size: 0.35 * SCALE, rz: -0.2 },
         ];
-        spotDefs.forEach(({ pos, scale, rx, rz }) => {
-            const sGeo = new THREE.SphereGeometry(1, 10, 8);
-            const spot = new THREE.Mesh(sGeo, spotMat);
-            spot.scale.set(...scale);
-            spot.position.set(...pos);
-            spot.rotation.x = rx;
+        spotDefs.forEach(({ x, y, z, size, rz }) => {
+            const sGeo = new THREE.CircleGeometry(size, 16);
+            const spot = new THREE.Mesh(sGeo, blackMat);
+            spot.position.set(x, y, z);
+            // 旋转使圆面朝向侧面
+            spot.rotation.y = z > 0 ? Math.PI / 2 : -Math.PI / 2;
             spot.rotation.z = rz;
-            group.add(spot);
+            bodyGroup.add(spot);
         });
 
-        // ===== 颈部 - 粗壮，连接头部与身体 =====
-        const neckGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.30, 8);
-        const neck = new THREE.Mesh(neckGeo, neckMat);
-        neck.position.set(0, 0.72, 0.44);
-        neck.rotation.x = Math.PI / 2.2;  // 前倾
-        group.add(neck);
+        // ===== 颈部 - 连接身体与头部 =====
+        const neckGeo = new THREE.CylinderGeometry(0.10, 0.13, 0.22, 8);
+        const neck = new THREE.Mesh(neckGeo, whiteMat);
+        neck.position.set(1.05 * SCALE, 0.08 * SCALE, 0);
+        neck.rotation.z = Math.PI / 2.2; // 前倾
+        bodyGroup.add(neck);
 
-        // ===== 头部 - 扁平宽阔，倒梯形，额头宽下颌窄 =====
+        // ===== 头部 - BoxGeometry 倒梯形，额头宽阔 =====
         const headGroup = new THREE.Group();
-        headGroup.position.set(0, 0.78, 0.72);
+        // 头部位置：身体前端 x = 1.0*SCALE = 0.42，再向前偏移
+        headGroup.position.set(1.2 * SCALE + 0.42, 0.55 + 0.3 * SCALE, 0);
         group.add(headGroup);
 
-        // 头部主体 - 扁平宽阔（宽>高>深）
-        const headGeo = new THREE.BoxGeometry(0.52, 0.38, 0.44);
-        const headMesh = new THREE.Mesh(headGeo, bodyMat);
+        // 头部主体
+        const headGeo = new THREE.BoxGeometry(0.8 * SCALE, 0.7 * SCALE, 0.7 * SCALE);
+        const headMesh = new THREE.Mesh(headGeo, whiteMat);
         headMesh.castShadow = true;
         headGroup.add(headMesh);
 
-        // 头部圆角感 - 在BoxGeometry基础上叠加圆润感
-        const headRoundGeo = new THREE.SphereGeometry(0.22, 10, 8);
-        const headRound = new THREE.Mesh(headRoundGeo, bodyMat);
-        headRound.scale.set(1.18, 0.86, 1.0);
-        headGroup.add(headRound);
-
         // 头部黑斑（左眼周围）
-        const headSpotGeo = new THREE.SphereGeometry(0.12, 8, 8);
-        const headSpot = new THREE.Mesh(headSpotGeo, spotMat);
-        headSpot.scale.set(1.0, 0.85, 0.5);
-        headSpot.position.set(-0.18, 0.04, 0.20);
+        const headSpotGeo = new THREE.CircleGeometry(0.25 * SCALE, 16);
+        const headSpot = new THREE.Mesh(headSpotGeo, blackMat);
+        headSpot.position.set(0.1 * SCALE, 0.2 * SCALE, 0.36 * SCALE);
+        headSpot.rotation.y = Math.PI / 2;
         headGroup.add(headSpot);
 
-        // ===== 眼睛 - 大而温和，位于头部两侧 =====
-        const earGroups = [];
-        [[-0.20, 0.04, 0.18], [0.20, 0.04, 0.18]].forEach(([ex, ey, ez]) => {
-            // 眼白
-            const ewGeo = new THREE.SphereGeometry(0.072, 10, 10);
-            const ewMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
-            const ew = new THREE.Mesh(ewGeo, ewMat);
-            ew.scale.set(1, 1, 0.55);
-            ew.position.set(ex, ey, ez);
-            headGroup.add(ew);
-            // 深棕瞳孔
-            const pupilGeo = new THREE.SphereGeometry(0.052, 10, 10);
-            const pupil = new THREE.Mesh(pupilGeo, eyeMat);
-            pupil.scale.set(1, 1, 0.55);
-            pupil.position.set(ex, ey, ez + 0.01);
-            headGroup.add(pupil);
-            // 高光
-            const hlGeo = new THREE.SphereGeometry(0.020, 6, 6);
-            const hl = new THREE.Mesh(hlGeo, eyeHighMat);
-            hl.position.set(ex + 0.018, ey + 0.022, ez + 0.038);
-            headGroup.add(hl);
-        });
+        // ===== 鼻镜 - 宽大矩形，粉色，突出于头部前方 =====
+        const noseGeo = new THREE.BoxGeometry(0.5 * SCALE, 0.3 * SCALE, 0.4 * SCALE);
+        const noseMesh = new THREE.Mesh(noseGeo, pinkMat);
+        noseMesh.position.set(0.5 * SCALE, -0.3 * SCALE, 0);
+        headGroup.add(noseMesh);
 
-        // ===== 鼻镜 - 宽大矩形，粉色，鼻孔朝下 =====
-        // 宽大矩形鼻镜，占头部下方1/3
-        const nosePadGeo = new THREE.BoxGeometry(0.32, 0.16, 0.08);
-        const nosePad = new THREE.Mesh(nosePadGeo, noseMat);
-        nosePad.position.set(0, -0.14, 0.22);
-        headGroup.add(nosePad);
-        // 鼻镜圆角
-        const noseRoundGeo = new THREE.SphereGeometry(0.14, 10, 8);
-        const noseRound = new THREE.Mesh(noseRoundGeo, noseMat);
-        noseRound.scale.set(1.14, 0.57, 0.29);
-        noseRound.position.set(0, -0.14, 0.22);
-        headGroup.add(noseRound);
-        // 两个大鼻孔（朝下）
-        [-0.09, 0.09].forEach(nx => {
-            const nGeo = new THREE.SphereGeometry(0.038, 8, 6);
-            const n = new THREE.Mesh(nGeo, nostrilMat);
-            n.scale.set(1.3, 0.5, 1.0);
-            n.position.set(nx, -0.20, 0.22);
+        // 鼻孔（朝下，用 CylinderGeometry）
+        [-0.1 * SCALE, 0.1 * SCALE].forEach(nz => {
+            const nGeo = new THREE.CylinderGeometry(0.06 * SCALE, 0.06 * SCALE, 0.1 * SCALE, 8);
+            const n = new THREE.Mesh(nGeo, darkPinkMat);
+            n.position.set(0.6 * SCALE, -0.4 * SCALE, nz);
+            n.rotation.x = Math.PI / 2; // 朝下
             headGroup.add(n);
         });
 
-        // ===== 犄角 - 短小弯曲向上，米黄色 =====
-        [-1, 1].forEach(side => {
-            const hornGroup = new THREE.Group();
-            hornGroup.position.set(side * 0.22, 0.20, -0.02);
-            // 犄角根部
-            const hornBaseGeo = new THREE.CylinderGeometry(0.030, 0.038, 0.12, 6);
-            const hornBase = new THREE.Mesh(hornBaseGeo, hornMat);
-            hornBase.rotation.z = side * 0.5;
-            hornBase.rotation.x = -0.2;
-            hornGroup.add(hornBase);
-            // 犄角弯曲尖端
-            const hornTipGeo = new THREE.CylinderGeometry(0.012, 0.028, 0.10, 6);
-            const hornTip = new THREE.Mesh(hornTipGeo, hornMat);
-            hornTip.position.set(side * 0.06, 0.10, -0.02);
-            hornTip.rotation.z = side * 0.9;
-            hornTip.rotation.x = -0.1;
-            hornGroup.add(hornTip);
-            // 圆润尖端球
-            const tipGeo = new THREE.SphereGeometry(0.014, 6, 6);
-            const tip = new THREE.Mesh(tipGeo, hornMat);
-            tip.position.set(side * 0.10, 0.16, -0.03);
-            hornGroup.add(tip);
-            headGroup.add(hornGroup);
+        // ===== 眼睛 - 大而温和，位于头部两侧 =====
+        const earGroups = [];
+        [0.36 * SCALE, -0.36 * SCALE].forEach(ez => {
+            // 眼白
+            const ewGeo = new THREE.SphereGeometry(0.10 * SCALE, 16, 16);
+            const ew = new THREE.Mesh(ewGeo, whiteSolid);
+            ew.position.set(0.3 * SCALE, 0.15 * SCALE, ez);
+            headGroup.add(ew);
+            // 深棕瞳孔
+            const pupilGeo = new THREE.SphereGeometry(0.07 * SCALE, 12, 12);
+            const pupil = new THREE.Mesh(pupilGeo, brownMat);
+            pupil.position.set(0.32 * SCALE, 0.15 * SCALE, ez);
+            headGroup.add(pupil);
+            // 高光
+            const hlGeo = new THREE.SphereGeometry(0.025 * SCALE, 8, 8);
+            const hl = new THREE.Mesh(hlGeo, whiteSolid);
+            hl.position.set(0.35 * SCALE, 0.20 * SCALE, ez + (ez > 0 ? 0.04 : -0.04) * SCALE);
+            headGroup.add(hl);
         });
 
-        // ===== 耳朵 - 水平向外伸展，叶片形，内侧粉色 =====
-        [-1, 1].forEach(side => {
+        // ===== 犄角 - 短小弯曲向上，米黄色 =====
+        [0.25 * SCALE, -0.25 * SCALE].forEach((hz, i) => {
+            const hornGeo = new THREE.CylinderGeometry(0.05 * SCALE, 0.08 * SCALE, 0.3 * SCALE, 8);
+            const horn = new THREE.Mesh(hornGeo, hornMat);
+            horn.position.set(-0.2 * SCALE, 0.5 * SCALE, hz);
+            horn.rotation.z = -0.3;
+            headGroup.add(horn);
+        });
+
+        // ===== 耳朵 - 水平向外伸展，ConeGeometry 叶片形，内侧粉色 =====
+        [0.5 * SCALE, -0.5 * SCALE].forEach((ez, i) => {
             const earGroup = new THREE.Group();
-            // 水平向外：z轴旋转使耳朵水平伸出
-            earGroup.position.set(side * 0.26, 0.10, 0.02);
-            earGroup.rotation.z = side * (Math.PI / 2 - 0.3); // 接近水平
-            // 耳朵外层 - 叶片形
-            const earGeo = new THREE.SphereGeometry(0.11, 8, 8);
-            const ear = new THREE.Mesh(earGeo, bodyMat);
-            ear.scale.set(0.65, 1.5, 0.35);
+            earGroup.position.set(-0.1 * SCALE, 0.3 * SCALE, ez);
+            // 外层白色耳朵
+            const earGeo = new THREE.ConeGeometry(0.15 * SCALE, 0.3 * SCALE, 8);
+            const ear = new THREE.Mesh(earGeo, whiteMat);
+            ear.rotation.z = Math.PI / 2;                          // 水平朝外
+            ear.rotation.x = ez > 0 ? -Math.PI / 6 : Math.PI / 6; // 略微前倾
             earGroup.add(ear);
-            // 耳内粉色
-            const earInGeo = new THREE.SphereGeometry(0.08, 8, 8);
-            const earIn = new THREE.Mesh(earInGeo, earInnerMat);
-            earIn.scale.set(0.45, 1.15, 0.25);
-            earIn.position.set(0, 0, 0.02);
+            // 内侧粉色
+            const earInGeo = new THREE.ConeGeometry(0.09 * SCALE, 0.22 * SCALE, 8);
+            const earIn = new THREE.Mesh(earInGeo, pinkMat);
+            earIn.rotation.z = Math.PI / 2;
+            earIn.rotation.x = ez > 0 ? -Math.PI / 6 : Math.PI / 6;
             earGroup.add(earIn);
             headGroup.add(earGroup);
             earGroups.push(earGroup);
         });
 
-        // ===== 四条腿 - 中等长度，直立稳健 =====
-        // 腿长0.38，约为总高1/3，比猪腿明显更长
-        const legGeo = new THREE.CylinderGeometry(0.092, 0.092, 0.38, 8);
+        // ===== 四条腿 - 中等长度，直立有力 =====
+        // 腿长 0.8*SCALE = 0.336，约为总高1/3
+        const legGeo = new THREE.CylinderGeometry(0.12 * SCALE, 0.10 * SCALE, 0.8 * SCALE, 8);
         const legDefs = [
-            { name: 'frontLeft',  x: -0.24, z:  0.36 },
-            { name: 'frontRight', x:  0.24, z:  0.36 },
-            { name: 'backLeft',   x: -0.24, z: -0.36 },
-            { name: 'backRight',  x:  0.24, z: -0.36 }
+            { name: 'frontLeft',  x:  0.6 * SCALE, z:  0.4 * SCALE },
+            { name: 'frontRight', x:  0.6 * SCALE, z: -0.4 * SCALE },
+            { name: 'backLeft',   x: -0.6 * SCALE, z:  0.4 * SCALE },
+            { name: 'backRight',  x: -0.6 * SCALE, z: -0.4 * SCALE },
         ];
         const legGroups = {};
         legDefs.forEach(({ name, x, z }) => {
             const lg = new THREE.Group();
-            lg.position.set(x, 0.38, z);
-            lg.rotation.z = (x < 0 ? -1 : 1) * 0.04; // 轻微外八
-            const leg = new THREE.Mesh(legGeo, legMat);
+            lg.position.set(x, 0.55 - 0.8 * SCALE, z);
+            const leg = new THREE.Mesh(legGeo, whiteMat);
+            leg.position.y = -0.4 * SCALE;
             lg.add(leg);
-            // 偶蹄 - 深灰色，两瓣可见
-            const hoofGeo = new THREE.BoxGeometry(0.16, 0.10, 0.18);
+            // 偶蹄 - 深灰色 BoxGeometry
+            const hoofGeo = new THREE.BoxGeometry(0.15 * SCALE, 0.10 * SCALE, 0.20 * SCALE);
             const hoof = new THREE.Mesh(hoofGeo, hoofMat);
-            hoof.position.y = -0.22;
+            hoof.position.y = -0.85 * SCALE;
             lg.add(hoof);
-            // 蹄缝（两瓣分叉线）
-            const cleftGeo = new THREE.BoxGeometry(0.02, 0.12, 0.20);
-            const cleftMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-            const cleft = new THREE.Mesh(cleftGeo, cleftMat);
-            cleft.position.y = -0.22;
-            lg.add(cleft);
             group.add(lg);
             legGroups[name] = lg;
         });
 
-        // ===== 乳房 - 位于后腿之间腹下，明显可见 =====
-        const udderGeo = new THREE.SphereGeometry(0.16, 10, 8);
-        const udder = new THREE.Mesh(udderGeo, udderMat);
-        udder.scale.set(1.5, 0.65, 1.2);
-        udder.position.set(0, 0.26, -0.28);
+        // ===== 乳房 - 位于后腿之间腹下，粉色明显可见 =====
+        const udderGeo = new THREE.SphereGeometry(0.20 * SCALE, 16, 16);
+        const udder = new THREE.Mesh(udderGeo, pinkMat);
+        udder.scale.set(1.0, 0.8, 1.2);
+        udder.position.set(-0.5 * SCALE, 0.55 - 0.7 * SCALE, 0);
         group.add(udder);
         // 4个乳头
-        [[-0.08, -0.12], [0.08, -0.12], [-0.08, 0.06], [0.08, 0.06]].forEach(([tx, tz]) => {
-            const tGeo = new THREE.CylinderGeometry(0.022, 0.018, 0.06, 6);
-            const tMat = new THREE.MeshLambertMaterial({ color: 0xF0B0B8 });
-            const t = new THREE.Mesh(tGeo, tMat);
-            t.position.set(tx, 0.18, tz - 0.28);
+        [
+            { x:  0.08 * SCALE, z:  0.08 * SCALE },
+            { x:  0.08 * SCALE, z: -0.08 * SCALE },
+            { x: -0.08 * SCALE, z:  0.08 * SCALE },
+            { x: -0.08 * SCALE, z: -0.08 * SCALE },
+        ].forEach(({ x, z }) => {
+            const tGeo = new THREE.CylinderGeometry(0.03 * SCALE, 0.04 * SCALE, 0.15 * SCALE, 8);
+            const t = new THREE.Mesh(tGeo, pinkMat);
+            t.position.set(-0.5 * SCALE + x, 0.55 - 0.85 * SCALE, z);
             group.add(t);
         });
 
-        // ===== 尾巴 - 细长，末端蓬松毛刷，自然下垂 =====
+        // ===== 尾巴 - 细长 + 末端黑色毛球 =====
         const tailGroup = new THREE.Group();
-        tailGroup.position.set(0, 0.62, -0.52);
-        // 尾杆（细长）
-        const tailGeo = new THREE.CylinderGeometry(0.016, 0.012, 0.45, 5);
-        const tailStick = new THREE.Mesh(tailGeo, tailMat);
-        tailStick.rotation.x = Math.PI / 6;  // 自然下垂角度
-        tailStick.position.set(0, -0.22, -0.10);
-        tailGroup.add(tailStick);
-        // 末端毛刷（蓬松球）
-        const tuftGeo = new THREE.SphereGeometry(0.08, 8, 8);
-        const tuft = new THREE.Mesh(tuftGeo, tailMat);
-        tuft.scale.set(1.2, 1.5, 1.2);
-        tuft.position.set(0, -0.48, -0.22);
-        tailGroup.add(tuft);
+        tailGroup.position.set(-1.2 * SCALE, 0.55 + 0.2 * SCALE, 0);
         group.add(tailGroup);
+        // 尾杆
+        const tailGeo = new THREE.CylinderGeometry(0.04 * SCALE, 0.06 * SCALE, 0.8 * SCALE, 8);
+        const tailStick = new THREE.Mesh(tailGeo, whiteMat);
+        tailStick.rotation.z = Math.PI / 4;
+        tailStick.position.set(-0.3 * SCALE, -0.3 * SCALE, 0);
+        tailGroup.add(tailStick);
+        // 末端毛球（黑色）
+        const tuftGeo = new THREE.SphereGeometry(0.12 * SCALE, 8, 8);
+        const tuft = new THREE.Mesh(tuftGeo, blackMat);
+        tuft.position.set(-0.55 * SCALE, -0.65 * SCALE, 0);
+        tailGroup.add(tuft);
 
         // ===== 存储部件引用，供动画系统使用 =====
         group.userData.parts = {
-            body, headGroup,
+            body: bodyGroup, headGroup,
             frontLeft:  legGroups.frontLeft,
             frontRight: legGroups.frontRight,
             backLeft:   legGroups.backLeft,
@@ -1036,9 +999,10 @@ const Scene3D = {
             leftEar:  earGroups[0],
             rightEar: earGroups[1]
         };
-        group.userData.baseBodyPos = body.position.clone();
+        group.userData.baseBodyPos = bodyGroup.position.clone();
         group.userData.baseHeadPos = headGroup.position.clone();
     },
+
 
 
 
