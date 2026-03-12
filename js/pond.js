@@ -1,17 +1,34 @@
 // ===== 池塘系统 =====
-// 池塘中心坐标
-const POND_CENTER = { x: -8, z: 8 };
-// 池塘椭圆半轴（长轴/短轴）
-const POND_RADIUS_X = 4.0;
-const POND_RADIUS_Z = 3.0;
+// 池塘中心坐标（左上角区域，远离土壤地块）
+const POND_CENTER = { x: -14, z: 11 };
+// 不规则湖泊的近似包围椭圆（用于碰撞检测）
+const POND_RADIUS_X = 5.0;
+const POND_RADIUS_Z = 4.0;
 // 障碍缓冲区（动物绕行时额外外扩）
 const POND_BUFFER = 0.5;
 
-// 钓鱼点配置
-const FISHING_SPOTS = [
-    { id: 0, x: -4.5, z: 8,    label: '右侧钓鱼点' },
-    { id: 1, x: -8,   z: 11.5, label: '下方钓鱼点' }
+// 不规则湖泊顶点（相对于POND_CENTER的偏移，顺时针）
+const POND_SHAPE_POINTS = [
+    [ 4.5,  0.5],  // 右侧突出
+    [ 3.8,  2.5],  // 右上
+    [ 1.5,  4.0],  // 上方
+    [-1.0,  3.8],  // 左上
+    [-3.5,  2.8],  // 左上角
+    [-5.0,  0.8],  // 左侧
+    [-4.8, -1.5],  // 左下
+    [-3.0, -3.5],  // 下方凹入
+    [-0.5, -4.2],  // 下方
+    [ 2.0, -3.8],  // 右下
+    [ 4.0, -2.0],  // 右下角
+    [ 4.5,  0.5],  // 回到起点
 ];
+
+// 钓鱼点配置（跟随湖泊新位置）
+const FISHING_SPOTS = [
+    { id: 0, x: POND_CENTER.x + 4.8, z: POND_CENTER.z - 0.5, label: '右侧钓鱼点' },
+    { id: 1, x: POND_CENTER.x,       z: POND_CENTER.z + 4.2, label: '上方钓鱼点' }
+];
+
 
 const PondSystem = {
     scene: null,
@@ -36,12 +53,16 @@ const PondSystem = {
         this._createFrog();
     },
 
+    // ===== 构建不规则湖泊Shape =====
+    _buildPondShape(scale = 1.0) {
+        const pts = POND_SHAPE_POINTS.map(([x, z]) => new THREE.Vector2(x * scale, z * scale));
+        return new THREE.Shape(pts);
+    },
+
     // ===== 池塘主体 =====
     _createPondBase() {
-        // 池底（深蓝绿色）
-        const bottomGeo = new THREE.EllipseCurve(0, 0, POND_RADIUS_X - 0.1, POND_RADIUS_Z - 0.1, 0, Math.PI * 2, false, 0);
-        const bottomPts = bottomGeo.getPoints(32);
-        const bottomShape = new THREE.Shape(bottomPts);
+        // 池底（深蓝绿色，略小于水面）
+        const bottomShape = this._buildPondShape(0.92);
         const bottomExtGeo = new THREE.ShapeGeometry(bottomShape);
         const bottomMat = new THREE.MeshLambertMaterial({ color: 0x2D5A5A, side: THREE.DoubleSide });
         const bottom = new THREE.Mesh(bottomExtGeo, bottomMat);
@@ -51,10 +72,8 @@ const PondSystem = {
         this.scene.add(bottom);
         this.pondBottomMesh = bottom;
 
-        // 水面（浅蓝色半透明）
-        const waterCurve = new THREE.EllipseCurve(0, 0, POND_RADIUS_X, POND_RADIUS_Z, 0, Math.PI * 2, false, 0);
-        const waterPts = waterCurve.getPoints(48);
-        const waterShape = new THREE.Shape(waterPts);
+        // 水面（浅蓝色半透明，不规则形状）
+        const waterShape = this._buildPondShape(1.0);
         const waterGeo = new THREE.ShapeGeometry(waterShape);
         const waterMat = new THREE.MeshPhysicalMaterial({
             color: 0x7EC8E3,
@@ -72,14 +91,11 @@ const PondSystem = {
         this.scene.add(water);
         this.pondMesh = water;
 
-        // 岸边过渡带（湿润泥土）
-        const shoreCurve = new THREE.EllipseCurve(0, 0, POND_RADIUS_X + 0.5, POND_RADIUS_Z + 0.5, 0, Math.PI * 2, false, 0);
-        const shorePts = shoreCurve.getPoints(48);
-        const shoreShape = new THREE.Shape(shorePts);
-        // 挖空内部（只留过渡带）
-        const innerCurve = new THREE.EllipseCurve(0, 0, POND_RADIUS_X, POND_RADIUS_Z, 0, Math.PI * 2, false, 0);
-        const innerPts = innerCurve.getPoints(48);
-        const holePath = new THREE.Path(innerPts);
+        // 岸边过渡带（湿润泥土，外扩0.6，挖空内部）
+        const shoreShape = this._buildPondShape(1.12);
+        const holePath = new THREE.Path(
+            POND_SHAPE_POINTS.map(([x, z]) => new THREE.Vector2(x, z))
+        );
         shoreShape.holes.push(holePath);
         const shoreGeo = new THREE.ShapeGeometry(shoreShape);
         const shoreMat = new THREE.MeshLambertMaterial({ color: 0x5C4033, side: THREE.DoubleSide });
@@ -88,6 +104,7 @@ const PondSystem = {
         shore.position.set(POND_CENTER.x, 0.001, POND_CENTER.z);
         shore.receiveShadow = true;
         this.scene.add(shore);
+
 
         // 鹅卵石（3-5块）
         const stonePositions = [
@@ -367,11 +384,28 @@ const PondSystem = {
     },
 
     // ===== 判断坐标是否在池塘内（含缓冲区） =====
+    // 使用椭圆近似做快速碰撞检测，再用射线法精确判断不规则形状
     isInPond(x, z, buffer = 0) {
-        const dx = (x - POND_CENTER.x) / (POND_RADIUS_X + buffer);
-        const dz = (z - POND_CENTER.z) / (POND_RADIUS_Z + buffer);
-        return dx * dx + dz * dz <= 1.0;
+        // 先用椭圆快速排除
+        const dx = (x - POND_CENTER.x) / (POND_RADIUS_X + buffer + 0.5);
+        const dz = (z - POND_CENTER.z) / (POND_RADIUS_Z + buffer + 0.5);
+        if (dx * dx + dz * dz > 1.0) return false;
+        // 再用射线法精确判断不规则多边形
+        const lx = x - POND_CENTER.x;
+        const lz = z - POND_CENTER.z;
+        const scale = 1.0 + buffer / Math.max(POND_RADIUS_X, POND_RADIUS_Z);
+        const pts = POND_SHAPE_POINTS;
+        let inside = false;
+        for (let i = 0, j = pts.length - 2; i < pts.length - 1; j = i++) {
+            const xi = pts[i][0] * scale, zi = pts[i][1] * scale;
+            const xj = pts[j][0] * scale, zj = pts[j][1] * scale;
+            const intersect = ((zi > lz) !== (zj > lz)) &&
+                (lx < (xj - xi) * (lz - zi) / (zj - zi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     },
+
 
     // ===== 在池塘内生成随机目标点 =====
     randomPointInPond() {
